@@ -404,7 +404,8 @@ class VFG(ForwardAnalysis, Analysis):   # pylint:disable=abstract-method
                 return n
 
     def irsb_from_node(self, node):
-        return self.project.factory.successors(node.state, addr=node.addr, num_inst=len(node.instruction_addrs))
+         num_inst = len(self.project.factory.block(addr=node.addr).instruction_addrs)
+         return self.project.factory.successors(node.state, addr=node.addr, num_inst=num_inst)
 
     def get_paths(self, begin, end):
         """
@@ -415,6 +416,7 @@ class VFG(ForwardAnalysis, Analysis):   # pylint:disable=abstract-method
         a_paths = []
         for p in paths:
             runs = map(self.irsb_from_node, p)
+            raise DeprecationWarning("angr.path.make_path() is no longer")
             a_paths.append(angr.path.make_path(self.project, runs))
         return a_paths
 
@@ -989,7 +991,8 @@ class VFG(ForwardAnalysis, Analysis):   # pylint:disable=abstract-method
         merged_state, _ = self._merge_states(state_0, state_1)
 
         new_job = VFGJob(jobs[0].addr, merged_state, self._context_sensitivity_level, jumpkind=jobs[0].jumpkind,
-                         block_id=jobs[0].block_id, call_stack=jobs[0].call_stack
+                         block_id=jobs[0].block_id, call_stack=jobs[0].call_stack,
+                         src_block_id=[jobs[0].src_block_id, jobs[1].src_block_id]
                          )
 
         self._top_function_analysis_task.jobs.append(new_job)
@@ -1040,7 +1043,8 @@ class VFG(ForwardAnalysis, Analysis):   # pylint:disable=abstract-method
         # import ipdb; ipdb.set_trace()
 
         new_job = VFGJob(jobs[0].addr, new_state, self._context_sensitivity_level, jumpkind=jobs[0].jumpkind,
-                         block_id=jobs[0].block_id, call_stack=jobs[0].call_stack
+                         block_id=jobs[0].block_id, call_stack=jobs[0].call_stack,
+                         src_block_id=[jobs[0].src_block_id, jobs[1].src_block_id]
                          )
         self._top_function_analysis_task.jobs.append(new_job)
 
@@ -1316,8 +1320,10 @@ class VFG(ForwardAnalysis, Analysis):   # pylint:disable=abstract-method
             self.graph.add_node(dst_node)
 
         else:
-            src_node = self._graph_get_node(src_block_id, terminator_for_nonexistent_node=True)
-            self.graph.add_edge(src_node, dst_node, **kwargs)
+            src_block_id = [src_block_id] if not isinstance(src_block_id,list) else src_block_id
+            for src_blk_id in src_block_id:
+                src_node = self._graph_get_node(src_blk_id, terminator_for_nonexistent_node=True)
+                self.graph.add_edge(src_node, dst_node, **kwargs)
 
     #
     # Other methods
@@ -1428,6 +1434,7 @@ class VFG(ForwardAnalysis, Analysis):   # pylint:disable=abstract-method
                                  block_id=new_block_id,
                                  jumpkind='Ijk_Ret',
                                  call_stack=new_call_stack,
+                                 src_block_id=job._block_id
                                  )
 
                 new_jobs.append(new_job)
@@ -1473,6 +1480,7 @@ class VFG(ForwardAnalysis, Analysis):   # pylint:disable=abstract-method
                              block_id=new_block_id,
                              jumpkind=successor_state.history.jumpkind,
                              call_stack=new_call_stack,
+                             src_block_id=job._block_id
                              )
 
             if successor.history.jumpkind == 'Ijk_Ret':
@@ -1711,6 +1719,7 @@ class VFG(ForwardAnalysis, Analysis):   # pylint:disable=abstract-method
                      block_id=block_id,
                      jumpkind=state.history.jumpkind,
                      call_stack=call_stack,
+                     src_block_id=job_key._block_id
                      )
         self._insert_job(job)
         self._top_task.jobs.append(job)
